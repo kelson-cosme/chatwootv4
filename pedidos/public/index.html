@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Pedidos</title>
+    <style>
+        body { font-family: sans-serif; margin: 15px; color: #333; }
+        h3 { color: #1f93ff; border-bottom: 2px solid #f0f0f0; padding-bottom: 5px;}
+        .pedido { border: 1px solid #ddd; border-radius: 5px; padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; }
+        .pedido p { margin: 5px 0; }
+        .status { font-weight: bold; }
+        .status.entregue { color: green; }
+        .status.enviado { color: orange; }
+        .status.pendente { color: red; }
+        .mensagem { color: #888; }
+    </style>
+</head>
+<body>
+    <h3>Histórico de Pedidos</h3>
+    <div id="app-content">
+        <p class="mensagem">Aguardando contexto do Chatwoot...</p>
+    </div>
+
+    <script>
+        const contentDiv = document.getElementById('app-content');
+        let appContextInterval;
+        const CHATWOOT_ORIGIN = 'http://localhost:3000';
+    
+        function processarContato(event) {
+            // Ignora mensagens que não sejam da janela principal
+            if (event.source !== window.parent) {
+                return;
+            }
+    
+            let chatwootData;
+    
+            // Tenta converter a string recebida para um objeto JSON.
+            // Se não for uma string JSON válida, a função para aqui para evitar erros.
+            try {
+                chatwootData = JSON.parse(event.data);
+            } catch (e) {
+                console.log("Mensagem não-JSON recebida, ignorando.", event.data);
+                return;
+            }
+    
+            // Agora, verificamos se é a mensagem que queremos usando o objeto convertido
+            if (chatwootData && chatwootData.event === 'appContext') {
+                
+                console.log("✅ Contexto COMPLETO recebido!", chatwootData.data);
+                
+                // Agora que temos a resposta, paramos de pedir.
+                clearInterval(appContextInterval);
+                
+                // Acessando os dados a partir do objeto 'chatwootData'
+                const contactId = chatwootData.data.conversation.meta.sender.id;
+                console.log("ID do Contato:", contactId);
+                const accountId = chatwootData.data.conversation.meta.assignee.account_id;
+                console.log("ID da Conta:", accountId);
+    
+                contentDiv.innerHTML = `<p class="mensagem">Buscando pedidos para o contato ID: ${contactId}...</p>`;
+    
+                fetch(`/api/pedidos/${contactId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        renderizarPedidos(data.pedidos);
+                    })
+                    .catch(error => {
+                        console.error('Erro ao buscar pedidos:', error);
+                        contentDiv.innerHTML = `<p class="mensagem" style="color: red;">Erro ao buscar pedidos.</p>`;
+                    });
+            }
+        }
+    
+        function renderizarPedidos(pedidos) {
+            if (!pedidos) {
+                contentDiv.innerHTML = `<p class="mensagem">Cliente não encontrado no sistema de pedidos.</p>`;
+                return;
+            }
+            if (pedidos.length === 0) {
+                contentDiv.innerHTML = `<p class="mensagem">Este cliente ainda não possui pedidos.</p>`;
+                return;
+            }
+            let html = '';
+            for (const pedido of pedidos) {
+                let statusClass = '';
+                if (pedido.status === 'Entregue') statusClass = 'entregue';
+                else if (pedido.status === 'Enviado') statusClass = 'enviado';
+                else if (pedido.status === 'Pagamento Pendente') statusClass = 'pendente';
+                html += `
+                    <div class="pedido">
+                        <p><strong>Pedido:</strong> ${pedido.id}</p>
+                        <p><strong>Data:</strong> ${pedido.data}</p>
+                        <p><strong>Valor:</strong> ${pedido.valor}</p>
+                        <p><strong>Status:</strong> <span class="status ${statusClass}">${pedido.status}</span></p>
+                    </div>
+                `;
+            }
+            contentDiv.innerHTML = html;
+        }
+    
+        window.addEventListener('message', processarContato);
+    
+        appContextInterval = setInterval(() => {
+            window.parent.postMessage({ event: 'appContext' }, CHATWOOT_ORIGIN);
+        }, 1000);
+    </script>
+</body>
+</html>
