@@ -1,229 +1,180 @@
+# -----------------------------------------------------------------
+# ARQUIVO RENDER.YAML TRADUZIDO DO SEU DOCKER-COMPOSE
+# Este formato é o correto para a plataforma Render.
+# -----------------------------------------------------------------
+
 services:
-  # --------------------- SERVIÇOS DO CHATWOOT ---------------------
-  rails:
-    image: 'ghcr.io/fazer-ai/chatwoot:v4.4.0-fazer-ai.13'
-    pull_policy: always
-    ports:
-      - "3000:3000"
-    volumes:
-      - 'storage:/app/storage'
-    depends_on:
-      postgres:
-        condition: service_healthy
-    # A secção 'command' abaixo é a correta para iniciar o servidor
-    entrypoint: docker/entrypoints/rails.sh
-    command:
-      - bundle
-      - exec
-      - rails
-      - s
-      - '-p'
-      - '3000'
-      - '-b'
-      - 0.0.0.0
-    environment:
-      - NODE_ENV=production
-      - RAILS_ENV=production
-      - INSTALLATION_ENV=docker
-      - DEFAULT_LOCALE=pt_BR
-      - 'FRONTEND_URL=${FRONTEND_URL}'
-      - 'INTERNAL_HOST_URL=http://rails:3000'
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - 'POSTGRES_USERNAME=${SERVICE_USER_POSTGRES}'
-      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}'
-      - 'POSTGRES_DATABASE=${POSTGRES_DB_CHATWOOT:-chatwoot_production}'
-      - 'SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}'
-      - 'REDIS_URL=redis://redis:6379'
-      - 'REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}'
-      - 'BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME=${BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME:-Chatwoot}'
-      - 'BAILEYS_PROVIDER_DEFAULT_URL=http://baileys-api:3025'
-      - 'BAILEYS_PROVIDER_DEFAULT_API_KEY=${SERVICE_PASSWORD_64_DEFAULTAPIKEY}'
-      - BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL=true
-      - 'MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL}'
-      - 'RESEND_API_KEY=${RESEND_API_KEY}'
-      # - 'BRAND_ASSETS_URL=${BRAND_ASSETS_URL}'
+  # 1. Banco de Dados PostgreSQL
+  - type: psql
+    name: postgres
+    plan: starter # Escolha o plano adequado
+    # O Render gerencia a criação de usuários e bancos.
+    # O script de inicialização para o N8N não é necessário da mesma forma.
+    # Você pode rodar comandos SQL no banco do N8N depois de criado, se precisar.
 
-      - INSTALLATION_NAME=Altma Industrial
-      - BRAND_NAME=Altma Industrial
-      - LOGO=https://raw.githubusercontent.com/kelson-cosme/icons/main/logo.png
-      - LOGO_DARK=https://raw.githubusercontent.com/kelson-cosme/icons/main/logo_dark.png
-      - LOGO_THUMBNAIL=https://raw.githubusercontent.com/kelson-cosme/icons/main/sidebar_logo.png
-      - FAVICON_URL=https://raw.githubusercontent.com/kelson-cosme/icons/main/favicon.ico
-      - BRAND_URL=https://kelson-cosme.vercel.app
-      - WIDGET_BRAND_URL=https://kelson-cosme.vercel.app
-      - TERMS_URL=https://kelson-cosme.vercel.app
-      - PRIVACY_URL=https://kelson-cosme.vercel.app
+  # 2. Redis
+  - type: redis
+    name: redis
+    plan: starter # Escolha o plano adequado
 
-    restart: always
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'wget -qO- --header="Accept: text/html" http://127.0.0.1:3000/'
-      interval: 60s
-      timeout: 20s
-      retries: 10
-  sidekiq:
-    image: 'ghcr.io/fazer-ai/chatwoot:latest'
-    pull_policy: always
-    volumes:
-      - 'storage:/app/storage'
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      - NODE_ENV=production
-      - RAILS_ENV=production
-      - INSTALLATION_ENV=docker
-      - DEFAULT_LOCALE=pt_BR
-      - 'FRONTEND_URL=${FRONTEND_URL}'
-      - 'INTERNAL_HOST_URL=http://rails:3000'
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - 'POSTGRES_USERNAME=${SERVICE_USER_POSTGRES}'
-      - 'POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}'
-      - 'POSTGRES_DATABASE=${POSTGRES_DB_CHATWOOT:-chatwoot_production}'
-      - 'SECRET_KEY_BASE=${SERVICE_PASSWORD_64_SECRETKEYBASE}'
-      - 'REDIS_URL=redis://redis:6379'
-      - 'REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}'
-      - 'BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME=${BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME:-Chatwoot}'
-      - 'BAILEYS_PROVIDER_DEFAULT_URL=http://baileys-api:3025'
-      - 'BAILEYS_PROVIDER_DEFAULT_API_KEY=${SERVICE_PASSWORD_64_DEFAULTAPIKEY}'
-      - BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL=true
-      - 'MAILER_SENDER_EMAIL=${MAILER_SENDER_EMAIL}'
-      - 'RESEND_API_KEY=${RESEND_API_KEY}'
+  # 3. Serviço Web Principal (Chatwoot Rails)
+  - type: web
+    name: rails
+    plan: starter # Chatwoot pode precisar de um plano 'Standard' em produção
+    # O Render vai usar a imagem Docker que você especificou
+    image:
+      url: ghcr.io/fazer-ai/chatwoot:v4.4.0-fazer-ai.13
+    # O Render usa 'startCommand' em vez de 'entrypoint'/'command'
+    startCommand: "bundle exec rails s -p 3000 -b 0.0.0.0"
+    healthCheck:
+      path: /
+    # Mapeamento de portas é automático para serviços web no Render.
+    envVars:
+      - key: RAILS_ENV
+        value: production
+      - key: INSTALLATION_ENV
+        value: render # Alterado de 'docker' para refletir o ambiente
+      - key: DEFAULT_LOCALE
+        value: pt_BR
+      # Conexões gerenciadas pelo Render (mais seguro e estável)
+      - key: POSTGRES_HOST
+        fromService:
+          type: psql
+          name: postgres
+          property: host
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis
+          property: url
+      # Conexão com o Baileys API (serviço interno)
+      - key: BAILEYS_PROVIDER_DEFAULT_URL
+        fromService:
+          type: web # ou 'private' se não precisar de acesso externo
+          name: baileys-api
+          property: url
+      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
+      # Use 'sync: false' para que o valor do painel não seja apagado
+      - key: FRONTEND_URL
+        sync: false # Ex: https://rails.onrender.com
+      - key: POSTGRES_USER
+        fromService:
+          type: psql
+          name: postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromService:
+          type: psql
+          name: postgres
+          property: password
+      - key: POSTGRES_DATABASE
+        fromService:
+          type: psql
+          name: postgres
+          property: database
+      - key: SECRET_KEY_BASE
+        sync: false # Crie este segredo no painel
+      - key: BAILEYS_PROVIDER_DEFAULT_API_KEY
+        sync: false # Crie este segredo no painel
+      - key: MAILER_SENDER_EMAIL
+        sync: false # Crie este segredo no painel
+      - key: RESEND_API_KEY
+        sync: false # Crie este segredo no painel
+      # -- Branding --
+      - key: INSTALLATION_NAME
+        value: Altma Industrial
+      - key: BRAND_NAME
+        value: Altma Industrial
+      - key: LOGO
+        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/logo.png
+      - key: LOGO_DARK
+        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/logo_dark.png
+      - key: LOGO_THUMBNAIL
+        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/sidebar_logo.png
+      - key: FAVICON_URL
+        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/favicon.ico
+      - key: BRAND_URL
+        value: https://kelson-cosme.vercel.app
+    # Discos persistentes (substitui 'volumes')
+    disks:
+      - name: storage
+        mountPath: /app/storage
+        sizeGB: 10 # Ajuste o tamanho
 
-        
-    command:
-      - bundle
-      - exec
-      - sidekiq
-      - '-C'
-      - config/sidekiq.yml
-    restart: always
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'ps aux | grep [s]idekiq'
-      interval: 20s
-      timeout: 20s
-      retries: 10
-  baileys-api:
-    image: 'ghcr.io/fazer-ai/baileys-api:latest'
-    pull_policy: always
-    volumes:
-      - 'storage:/app/storage'
-    depends_on:
-      redis:
-        condition: service_healthy
-    environment:
-      - NODE_ENV=production
-      - 'REDIS_URL=redis://redis:6379'
-      - 'REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}'
-      - 'LOG_LEVEL=${LOG_LEVEL:-debug}'
-      - 'BAILEYS_LOG_LEVEL=${BAILEYS_LOG_LEVEL:-error}'
-      - 'BAILEYS_PROVIDER_DEFAULT_API_KEY=${SERVICE_PASSWORD_64_DEFAULTAPIKEY}'
+  # 4. Worker do Sidekiq
+  - type: worker
+    name: sidekiq
+    plan: starter
+    image:
+      url: ghcr.io/fazer-ai/chatwoot:latest
+    startCommand: "bundle exec sidekiq -C config/sidekiq.yml"
+    envVars:
+      # As variáveis de ambiente do worker são geralmente as mesmas do serviço web.
+      # O Render permite copiar facilmente o grupo de variáveis no painel.
+      # Por simplicidade, vou omitir a repetição aqui, mas elas precisam estar configuradas.
+      - fromGroup: rails # Copia as variáveis do grupo 'rails' (você precisa criar este grupo no painel)
+    # O worker precisa acessar o mesmo disco de armazenamento
+    disks:
+      - name: storage
+        mountPath: /app/storage
 
-      - INSTALLATION_NAME=Altma Industrial
-      - BRAND_NAME=Altma Industrial
-      - LOGO=https://raw.githubusercontent.com/kelson-cosme/icons/main/logo.png
-      - LOGO_DARK=https://raw.githubusercontent.com/kelson-cosme/icons/main/logo_dark.png
-      - LOGO_THUMBNAIL=https://raw.githubusercontent.com/kelson-cosme/icons/main/sidebar_logo.png
-      - FAVICON_URL=https://raw.githubusercontent.com/kelson-cosme/icons/main/favicon.ico
-      - BRAND_URL=https://kelson-cosme.vercel.app
-      - WIDGET_BRAND_URL=https://kelson-cosme.vercel.app
-      - TERMS_URL=https://kelson-cosme.vercel.app
-      - PRIVACY_URL=https://kelson-cosme.vercel.app
-    command:
-      - sh
-      - '-c'
-      - 'bun manage-api-keys create user ${SERVICE_PASSWORD_64_DEFAULTAPIKEY} && bun start'
-    restart: always
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'wget -qO- http://localhost:3025/status'
-      interval: 20s
-      timeout: 20s
-      retries: 10
+  # 5. Baileys API
+  - type: web # Pode ser um 'private service' se só for acessado internamente
+    name: baileys-api
+    plan: starter
+    image:
+      url: ghcr.io/fazer-ai/baileys-api:latest
+    # O comando precisa ser ajustado para funcionar no Render
+    startCommand: "bun manage-api-keys create user $BAILEYS_PROVIDER_DEFAULT_API_KEY && bun start"
+    healthCheck:
+      path: /status
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis
+          property: url
+      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
+      - key: BAILEYS_PROVIDER_DEFAULT_API_KEY
+        sync: false # Crie este segredo no painel
 
-  # --------------------- SERVIÇOS PARTILHADOS ---------------------
-  postgres:
-    image: 'ghcr.io/fazer-ai/postgres-16-pgvector:latest'
-    restart: always
-    volumes:
-      - 'postgres-data:/var/lib/postgresql/data'
-      - './postgres-init:/docker-entrypoint-initdb.d'
-    environment:
-      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
-      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
-      - POSTGRES_DB=${POSTGRES_DB_CHATWOOT:-chatwoot_production} # DB Padrão
-      - POSTGRES_DB_N8N=${POSTGRES_DB_N8N:-n8n} # Passa o nome da DB do n8n para o script
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'pg_isready -h localhost -p 5432 -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
-      interval: 20s
-      timeout: 20s
-      retries: 10
-  redis:
-    image: 'redis:alpine'
-    restart: always
-    command:
-      - sh
-      - '-c'
-      - 'redis-server --requirepass "${SERVICE_PASSWORD_REDIS}"'
-    volumes:
-      - 'redis-data:/data'
-    environment:
-      - 'REDIS_PASSWORD=${SERVICE_PASSWORD_REDIS}'
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'redis-cli -h localhost -p 6379 -a $${REDIS_PASSWORD} ping'
-      interval: 20s
-      timeout: 20s
-      retries: 10
-
-  # --------------------- NOVO SERVIÇO N8N ---------------------
-  n8n:
-    image: 'docker.n8n.io/n8nio/n8n:latest'
-    restart: always
-    ports:
-      - "5678:5678"
-    volumes:
-      - 'n8n-data:/home/node/.n8n'
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - 'N8N_EDITOR_BASE_URL=${N8N_URL}'
-      - 'WEBHOOK_URL=${N8N_URL}'
-      - 'N8N_HOST=n8n'
-      - 'GENERIC_TIMEZONE=${GENERIC_TIMEZONE}'
-      - 'TZ=${GENERIC_TIMEZONE}'
-      - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB_N8N}
-      - DB_POSTGRESDB_HOST=postgres
-      - DB_POSTGRESDB_PORT=5432
-      - DB_POSTGRESDB_USER=${SERVICE_USER_POSTGRES}
-      - DB_POSTGRESDB_SCHEMA=public
-      - DB_POSTGRESDB_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
-      - NODE_FUNCTION_ALLOW_EXTERNAL=@devlikeapro/n8n-nodes-chatwoot
-
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'wget -qO- http://127.0.0.1:5678/'
-      interval: 5s
-      timeout: 20s
-      retries: 10
-
-# --------------------- VOLUMES PARA TODOS OS SERVIÇOS ---------------------
-volumes:
-  storage:
-  postgres-data:
-  redis-data:
-  n8n-data:
+  # 6. N8N
+  - type: web
+    name: n8n
+    plan: starter
+    image:
+      url: docker.n8n.io/n8nio/n8n:latest
+    startCommand: n8n # O comando padrão da imagem
+    healthCheck:
+      path: /
+    envVars:
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromService:
+          type: psql
+          name: postgres
+          property: host
+      - key: DB_POSTGRESDB_USER
+        fromService:
+          type: psql
+          name: postgres
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromService:
+          type: psql
+          name: postgres
+          property: password
+      - key: DB_POSTGRESDB_DATABASE
+        value: n8n # O Render cria um banco principal; o N8N precisará de um banco separado
+      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
+      - key: N8N_EDITOR_BASE_URL
+        sync: false # Ex: https://n8n.onrender.com
+      - key: WEBHOOK_URL
+        sync: false # Ex: https://n8n.onrender.com
+      - key: GENERIC_TIMEZONE
+        sync: false # Ex: America/Sao_Paulo
+    disks:
+      - name: n8n-data
+        mountPath: /home/node/.n8n
+        sizeGB: 5
