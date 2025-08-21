@@ -5,7 +5,7 @@
 
 services:
   # 1. Banco de Dados PostgreSQL
-  - type: psql
+  - type: postgres
     name: postgres
     plan: starter # Escolha o plano adequado
     # O Render gerencia a criação de usuários e bancos.
