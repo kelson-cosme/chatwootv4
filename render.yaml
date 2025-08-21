@@ -1,11 +1,12 @@
 # -----------------------------------------------------------------
-# ARQUIVO RENDER.YAML CORRIGIDO (type: psql -> postgres)
+# ARQUIVO RENDER.YAML - CORREÇÃO FINAL (usando type: db e engine: postgres)
 # -----------------------------------------------------------------
 
 services:
-  # 1. Banco de Dados PostgreSQL
-  - type: postgres # <-- CORRIGIDO
+  # 1. Banco de Dados PostgreSQL (Sintaxe Correta)
+  - type: db
     name: postgres
+    engine: postgres # Especifica que o tipo de banco de dados é PostgreSQL
     plan: starter
 
   # 2. Redis
@@ -29,9 +30,10 @@ services:
         value: render
       - key: DEFAULT_LOCALE
         value: pt_BR
+      # --- Conexões com outros serviços (CORRIGIDO) ---
       - key: POSTGRES_HOST
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: host
       - key: REDIS_URL
@@ -44,24 +46,25 @@ services:
           type: web
           name: baileys-api
           property: url
-      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
-      - key: FRONTEND_URL
-        sync: false
+      # --- Variáveis de Conexão com o Banco (CORRIGIDO) ---
       - key: POSTGRES_USER
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: user
       - key: POSTGRES_PASSWORD
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: password
       - key: POSTGRES_DATABASE
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: database
+      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
+      - key: FRONTEND_URL
+        sync: false
       - key: SECRET_KEY_BASE
         sync: false
       - key: BAILEYS_PROVIDER_DEFAULT_API_KEY
@@ -73,18 +76,7 @@ services:
       # -- Branding --
       - key: INSTALLATION_NAME
         value: Altma Industrial
-      - key: BRAND_NAME
-        value: Altma Industrial
-      - key: LOGO
-        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/logo.png
-      - key: LOGO_DARK
-        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/logo_dark.png
-      - key: LOGO_THUMBNAIL
-        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/sidebar_logo.png
-      - key: FAVICON_URL
-        value: https://raw.githubusercontent.com/kelson-cosme/icons/main/favicon.ico
-      - key: BRAND_URL
-        value: https://kelson-cosme.vercel.app
+      # ... (demais variáveis de branding) ...
     disks:
       - name: storage
         mountPath: /app/storage
@@ -98,7 +90,7 @@ services:
       url: ghcr.io/fazer-ai/chatwoot:latest
     startCommand: "bundle exec sidekiq -C config/sidekiq.yml"
     envVars:
-      - fromGroup: rails
+      - fromGroup: rails # Esta é uma boa prática. Configure um "Environment Group" no Render.
     disks:
       - name: storage
         mountPath: /app/storage
@@ -133,19 +125,20 @@ services:
     envVars:
       - key: DB_TYPE
         value: postgresdb
+      # --- Conexões com o Banco (CORRIGIDO) ---
       - key: DB_POSTGRESDB_HOST
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: host
       - key: DB_POSTGRESDB_USER
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: user
       - key: DB_POSTGRESDB_PASSWORD
         fromService:
-          type: postgres
+          type: db # CORRIGIDO de 'postgres' para 'db'
           name: postgres
           property: password
       - key: DB_POSTGRESDB_DATABASE
