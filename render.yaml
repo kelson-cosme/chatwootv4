@@ -1,12 +1,9 @@
-# -----------------------------------------------------------------
-# ARQUIVO RENDER.YAML - CORREÇÃO FINAL (usando type: db e engine: postgres)
-# -----------------------------------------------------------------
+# Corrected render.yaml using the standard 'psql' type for PostgreSQL
 
 services:
-  # 1. Banco de Dados PostgreSQL (Sintaxe Correta)
-  - type: db
+  # 1. PostgreSQL Database using the standard 'psql' type
+  - type: psql
     name: postgres
-    engine: postgres # Especifica que o tipo de banco de dados é PostgreSQL
     plan: starter
 
   # 2. Redis
@@ -14,7 +11,7 @@ services:
     name: redis
     plan: starter
 
-  # 3. Serviço Web Principal (Chatwoot Rails)
+  # 3. Chatwoot Rails Web Service
   - type: web
     name: rails
     plan: starter
@@ -24,65 +21,42 @@ services:
     healthCheck:
       path: /
     envVars:
-      - key: RAILS_ENV
-        value: production
-      - key: INSTALLATION_ENV
-        value: render
-      - key: DEFAULT_LOCALE
-        value: pt_BR
-      # --- Conexões com outros serviços (CORRIGIDO) ---
+      # --- References to other services, corrected to use 'psql' ---
       - key: POSTGRES_HOST
         fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
+          type: psql # Corrected
           name: postgres
           property: host
+      - key: POSTGRES_USER
+        fromService:
+          type: psql # Corrected
+          name: postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromService:
+          type: psql # Corrected
+          name: postgres
+          property: password
+      - key: POSTGRES_DATABASE
+        fromService:
+          type: psql # Corrected
+          name: postgres
+          property: database
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis
           property: url
-      - key: BAILEYS_PROVIDER_DEFAULT_URL
-        fromService:
-          type: web
-          name: baileys-api
-          property: url
-      # --- Variáveis de Conexão com o Banco (CORRIGIDO) ---
-      - key: POSTGRES_USER
-        fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
-          name: postgres
-          property: user
-      - key: POSTGRES_PASSWORD
-        fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
-          name: postgres
-          property: password
-      - key: POSTGRES_DATABASE
-        fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
-          name: postgres
-          property: database
-      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
-      - key: FRONTEND_URL
-        sync: false
+      # --- Other environment variables ---
+      - key: RAILS_ENV
+        value: production
+      # --- Variables to be set in the Render Dashboard ---
       - key: SECRET_KEY_BASE
         sync: false
-      - key: BAILEYS_PROVIDER_DEFAULT_API_KEY
+      - key: FRONTEND_URL
         sync: false
-      - key: MAILER_SENDER_EMAIL
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      # -- Branding --
-      - key: INSTALLATION_NAME
-        value: Altma Industrial
-      # ... (demais variáveis de branding) ...
-    disks:
-      - name: storage
-        mountPath: /app/storage
-        sizeGB: 10
 
-  # 4. Worker do Sidekiq
+  # 4. Sidekiq Worker
   - type: worker
     name: sidekiq
     plan: starter
@@ -90,67 +64,19 @@ services:
       url: ghcr.io/fazer-ai/chatwoot:latest
     startCommand: "bundle exec sidekiq -C config/sidekiq.yml"
     envVars:
-      - fromGroup: rails # Esta é uma boa prática. Configure um "Environment Group" no Render.
-    disks:
-      - name: storage
-        mountPath: /app/storage
-
-  # 5. Baileys API
-  - type: web
-    name: baileys-api
-    plan: starter
-    image:
-      url: ghcr.io/fazer-ai/baileys-api:latest
-    startCommand: "bun manage-api-keys create user $BAILEYS_PROVIDER_DEFAULT_API_KEY && bun start"
-    healthCheck:
-      path: /status
-    envVars:
+      # It is recommended to create an Environment Group in the Render dashboard
+      # and apply it to both the 'rails' and 'sidekiq' services.
+      - key: POSTGRES_URL
+        fromService:
+          type: psql # Corrected
+          name: postgres
+          property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
           name: redis
-          property: url
-      - key: BAILEYS_PROVIDER_DEFAULT_API_KEY
+          property: connectionString
+      - key: RAILS_ENV
+        value: production
+      - key: SECRET_KEY_BASE
         sync: false
-
-  # 6. N8N
-  - type: web
-    name: n8n
-    plan: starter
-    image:
-      url: docker.n8n.io/n8nio/n8n:latest
-    startCommand: n8n
-    healthCheck:
-      path: /
-    envVars:
-      - key: DB_TYPE
-        value: postgresdb
-      # --- Conexões com o Banco (CORRIGIDO) ---
-      - key: DB_POSTGRESDB_HOST
-        fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
-          name: postgres
-          property: host
-      - key: DB_POSTGRESDB_USER
-        fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
-          name: postgres
-          property: user
-      - key: DB_POSTGRESDB_PASSWORD
-        fromService:
-          type: db # CORRIGIDO de 'postgres' para 'db'
-          name: postgres
-          property: password
-      - key: DB_POSTGRESDB_DATABASE
-        value: n8n
-      # --- VARIÁVEIS QUE VOCÊ PRECISA CRIAR NO PAINEL DO RENDER ---
-      - key: N8N_EDITOR_BASE_URL
-        sync: false
-      - key: WEBHOOK_URL
-        sync: false
-      - key: GENERIC_TIMEZONE
-        sync: false
-    disks:
-      - name: n8n-data
-        mountPath: /home/node/.n8n
-        sizeGB: 5
