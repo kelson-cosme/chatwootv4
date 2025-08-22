@@ -71,13 +71,11 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
   else bundle install -j 4 -r 3; \
   fi
 
-# Copia o pnpm-lock.yaml da raiz do repositório para /app
-COPY pnpm-lock.yaml ./
-
-# Copia o package.json de app/javascript/ para /app
-COPY app/javascript/package.jsRUN pnpm i
-
+# Copia todo o código-fonte do repositório para o contêiner
 COPY . /app
+
+# Agora, com todos os ficheiros no sítio, instala as dependências do pnpm
+RUN pnpm i
 
 # creating a log directory so that image wont fail when RAILS_LOG_TO_STDOUT is false
 # https://github.com/chatwoot/chatwoot/issues/701
